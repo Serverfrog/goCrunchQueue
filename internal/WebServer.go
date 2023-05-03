@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/fasthttp/router"
+	"github.com/fasthttp/websocket"
 	"github.com/hellofresh/health-go/v5"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
@@ -12,12 +13,10 @@ import (
 	"github.com/valyala/fasthttp/fasthttpadaptor"
 	"mime"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
-
-type GetWidget struct {
-	WidgetId string `json:"WidgetId"`
-}
 
 var AssetsBasePath, _ = os.Getwd()
 var staticResources = make(map[string]*CachedHtml)
@@ -25,25 +24,47 @@ var staticResources = make(map[string]*CachedHtml)
 const acceptEncoding = "Accept-Encoding"
 const contentEncoding = "content-encoding"
 
+var upgrader = websocket.FastHTTPUpgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+}
+
+const (
+	// Time allowed to write the file to the client.
+	writeWait = 10 * time.Second
+
+	// Time allowed to read the next pong message from the client.
+	pongWait = 60 * time.Second
+
+	// Send pings to client with this period. Must be less than pongWait.
+	pingPeriod  = (pongWait * 9) / 10
+	eventPeriod = 250 * time.Millisecond
+)
+
 func returnAsset(ctx *fasthttp.RequestCtx) {
+	DebugLog("Serving an Assets under /ui")
 	if bytes.Contains(ctx.Path(), []byte("..")) {
 		ctx.SetStatusCode(fasthttp.StatusNotFound)
 		return
 	}
-	paths := strings.SplitAfter(string(ctx.Path()), "/assets/")
+	DebugLogf("Serving %v", string(ctx.Path()))
+	paths := strings.SplitAfter(string(ctx.Path()), "/ui/")
+	DebugLogf("Have Split the Paths. %v", paths)
 	if len(paths) != 2 || paths[1] == "" {
 		ctx.SetStatusCode(fasthttp.StatusNotFound)
 		return
 	}
-	staticResource, exists := staticResources[paths[1]]
+	resourcePath := fmt.Sprintf("/%v", paths[1])
+	staticResource, exists := staticResources[resourcePath]
 
 	if !exists {
+		DebugLogf("Resource \"%v\" does not exists in %v", resourcePath, staticResources)
 		ctx.SetStatusCode(fasthttp.StatusNotFound)
 		return
 	}
 	chooseCompression(ctx, staticResource)
 
-	ext := strings.SplitAfter(paths[1], ".")
+	ext := strings.SplitAfter(resourcePath, ".")
 	if len(paths) != 2 {
 		return
 	}
@@ -68,32 +89,38 @@ func chooseCompression(ctx *fasthttp.RequestCtx, cachedHtml *CachedHtml) {
 
 func createResourceCache() {
 	log.Print("Create static Resource Cache")
-	assetsPath := fmt.Sprintf("%v/assets/", AssetsBasePath)
-	directory := HandleError(os.ReadDir(assetsPath))
+	assetsPath := fmt.Sprintf("%v/ui", AssetsBasePath)
+	createResourceCacheForDirectory(assetsPath, "")
+	DebugLog("Created Resource Cache")
+}
 
+func createResourceCacheForDirectory(baseDir string, root string) {
+
+	directory := HandleError(os.ReadDir(baseDir))
 	for _, entry := range directory {
 		if entry.IsDir() {
+			createResourceCacheForDirectory(fmt.Sprintf("%v/%v", baseDir, entry.Name()), fmt.Sprintf("%v/%v", root, entry.Name()))
 			continue
 		}
-		filePath := fmt.Sprintf("%v/%v", assetsPath, entry.Name())
+		filePath := fmt.Sprintf("%v/%v", baseDir, entry.Name())
 
 		byteArray := HandleError(os.ReadFile(filePath))
-		staticResources[entry.Name()] = createCache(byteArray)
+		staticResources[fmt.Sprintf("%v/%v", root, entry.Name())] = createCache(byteArray)
 		log.Infof("Created Cache for: %v", filePath)
 	}
-
 }
 
 // api listens on `/api` and accepts a QueueItem
-// This will then be put into the Queue, and if all is successfull it will return OK
+// This will then be put into the Queue, and if all is successfully it will return OK
 func addElement(ctx *fasthttp.RequestCtx) {
 	var toAdd QueueItem
 	HandleErrorB(json.Unmarshal(ctx.PostBody(), &toAdd))
 	toAdd = createQueueItem(toAdd.Name, toAdd.CrunchyrollUrl)
 	queue.Push(toAdd)
-	handleEvent(Event{
-		id:   Added,
-		item: toAdd,
+	eventHandler.handleEvent(Event{
+		Id:      Added,
+		Item:    toAdd,
+		Message: fmt.Sprintf("Item Added via REST API :%v, Name:%v, Url:%v", toAdd.Id, toAdd.Name, toAdd.CrunchyrollUrl),
 	})
 }
 
@@ -104,7 +131,76 @@ func getAll(ctx *fasthttp.RequestCtx) {
 }
 
 func getCurrentProcessed(ctx *fasthttp.RequestCtx) {
+	worker.mux.Lock()
+	defer worker.mux.Unlock()
+	ctx.SetBody(HandleError(json.Marshal(worker.currentItem)))
+	ctx.SetStatusCode(fasthttp.StatusOK)
+	ctx.SetContentType("text/json")
+}
 
+func webSocket(ctx *fasthttp.RequestCtx) {
+	err := upgrader.Upgrade(ctx, func(ws *websocket.Conn) {
+		var lastMod time.Time
+		if n, err := strconv.ParseInt(string(ctx.FormValue("lastMod")), 16, 64); err == nil {
+			lastMod = time.Unix(0, n)
+		}
+
+		go writer(ws, lastMod)
+		reader(ws)
+	})
+
+	if err != nil {
+		if _, ok := err.(websocket.HandshakeError); ok {
+			log.Println(err)
+		}
+		return
+	}
+}
+func reader(ws *websocket.Conn) {
+	defer ws.Close()
+	ws.SetReadLimit(512)
+	HandleErrorB(ws.SetReadDeadline(time.Now().Add(pongWait)))
+	ws.SetPongHandler(func(string) error { HandleErrorB(ws.SetReadDeadline(time.Now().Add(pongWait))); return nil })
+	for {
+		_, _, err := ws.ReadMessage()
+		if err != nil {
+			break
+		}
+	}
+}
+
+func writer(ws *websocket.Conn, lastMod time.Time) {
+	pingTicker := time.NewTicker(pingPeriod)
+	eventTicker := time.NewTicker(eventPeriod)
+	defer func() {
+		pingTicker.Stop()
+		HandleErrorB(ws.Close())
+	}()
+	for {
+		select {
+		case <-pingTicker.C:
+			HandleErrorB(ws.SetWriteDeadline(time.Now().Add(writeWait)))
+			if err := ws.WriteMessage(websocket.PingMessage, []byte{}); err != nil {
+				return
+			}
+		case <-eventTicker.C:
+			for event, value := range wsEventListener.getEvents() {
+				HandleErrorB(ws.SetWriteDeadline(time.Now().Add(writeWait)))
+				HandleErrorB(ws.WriteMessage(websocket.TextMessage, value))
+				log.Debugf("Send Event %v for Item %v", event.Id, event.Item.Id)
+			}
+		}
+	}
+}
+
+func notFoundHandler(ctx *fasthttp.RequestCtx) {
+	DebugLogf("Not found. %v", string(ctx.Path()))
+	ctx.SetStatusCode(fasthttp.StatusNotFound)
+}
+
+func redirectToIndexHtml(ctx *fasthttp.RequestCtx) {
+	DebugLog("Redirect to Index.html")
+	ctx.Redirect("/ui/index.html", fasthttp.StatusMovedPermanently)
 }
 
 func buildHandler(version string) *router.Router {
@@ -115,11 +211,14 @@ func buildHandler(version string) *router.Router {
 	}))
 
 	router := router.New()
-	router.GET("/ui", returnAsset)
 	router.POST("/api/add", addElement)
 	router.GET("/api/all", getAll)
 	router.GET("/api/current", getCurrentProcessed)
+	router.ANY("/ws", webSocket)
 	router.GET("/status", fasthttpadaptor.NewFastHTTPHandler(h.Handler()))
+	router.GET("/ui/", redirectToIndexHtml)
+	router.GET("/ui/{filepath:*}", returnAsset)
+	router.NotFound = notFoundHandler
 	return router
 }
 

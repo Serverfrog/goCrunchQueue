@@ -12,7 +12,7 @@ type QueueItem struct {
 	CrunchyrollUrl string
 }
 
-// QueueItemBuilder creates a new item and returns a pointer to it.
+// QueueItemBuilder creates a new Item and returns a pointer to it.
 // This is used when we load a segment of the queue from disk.
 func QueueItemBuilder() interface{} {
 	return &QueueItem{}

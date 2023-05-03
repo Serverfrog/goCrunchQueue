@@ -1,3 +1,5 @@
 ---
 Debug: true
 Port: 80
+MediaDestination: ./media-destination
+LogDestination: ./logs

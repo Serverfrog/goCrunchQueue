@@ -56,5 +56,5 @@ func DebugLogf(template string, args ...interface{}) {
 	if !configuration.Debug {
 		return
 	}
-	log.Debug(template, args)
+	log.Debugf(template, args)
 }

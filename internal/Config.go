@@ -4,6 +4,7 @@ import (
 	"github.com/gookit/config/v2"
 	"github.com/gookit/config/v2/yaml"
 	"github.com/mitchellh/mapstructure"
+	log "github.com/sirupsen/logrus"
 )
 
 // Configuration is the struct which is used to bind the config file to for easier use
@@ -33,6 +34,10 @@ func ReadConfig(configPath *string) {
 
 	configurationValueTemp := Configuration{}
 	HandleFatalErrorf(config.BindStruct("", &configurationValueTemp), "Could not bind Struct to Configuration.")
-	DebugLogf("Configuration is %s", configurationValueTemp)
 	configuration = configurationValueTemp
+	if configuration.Debug {
+		log.SetLevel(log.TraceLevel)
+	}
+
+	DebugLogf("Configuration is %s", configuration)
 }
