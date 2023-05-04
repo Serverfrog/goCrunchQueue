@@ -1,5 +1,5 @@
 
-FROM debian:bookworm-slim as baseImage
+FROM debian:bookworm-slim as baseimage
 LABEL authors="serverfrog"
 
 RUN apt-get update
@@ -44,7 +44,7 @@ RUN go mod download && go mod verify
 
 RUN go build -race -ldflags "-extldflags '-static'" -o goCrunchQueue cmd/Lets.go
 
-FROM baseImage
+FROM baseimage
 
 RUN mkdir /goCrunchQueue
 

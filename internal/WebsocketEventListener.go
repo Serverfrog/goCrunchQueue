@@ -2,9 +2,7 @@ package internal
 
 import (
 	"encoding/json"
-	"fmt"
 	log "github.com/sirupsen/logrus"
-	"os"
 	"sync"
 )
 
@@ -52,15 +50,15 @@ func (ws *WebsocketEventListener) getEvents() map[Event][]byte {
 }
 
 func (ws *WebsocketEventListener) getContentForEvent(event Event) []byte {
-	if event.Id == InfoLogUpdated {
-		path := fmt.Sprintf("%v/%v-out.txt", configuration.LogDestination, event.Item.Id)
-		event.Message = string(HandleError(os.ReadFile(path)))
-		return HandleError(json.Marshal(event))
-	}
-	if event.Id == ErrLogUpdated {
-		path := fmt.Sprintf("%v/%v-err.txt", configuration.LogDestination, event.Item.Id)
-		event.Message = string(HandleError(os.ReadFile(path)))
-		return HandleError(json.Marshal(event))
-	}
+	//if event.Id == InfoLogUpdated {
+	//	path := fmt.Sprintf("%v/%v-out.txt", configuration.LogDestination, event.Item.Id)
+	//	event.Message = string(HandleError(os.ReadFile(path)))
+	//	return HandleError(json.Marshal(event))
+	//}
+	//if event.Id == ErrLogUpdated {
+	//	path := fmt.Sprintf("%v/%v-err.txt", configuration.LogDestination, event.Item.Id)
+	//	event.Message = string(HandleError(os.ReadFile(path)))
+	//	return HandleError(json.Marshal(event))
+	//}
 	return HandleError(json.Marshal(event))
 }

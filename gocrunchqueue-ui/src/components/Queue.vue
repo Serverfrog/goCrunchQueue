@@ -2,7 +2,7 @@
     <div class="">
         <li class="flex flex-row h-8 bg-emerald-600" v-if="currentItem.Id">
             <div class="grow">
-                <p> {{ currentItem.Name}}</p>
+                <p> {{ currentItem.Name}} | {{ currentItemProgress }}</p>
             </div>
             <div class="grow">
                 <p> {{ currentItem.CrunchyrollUrl}}</p>
@@ -44,7 +44,8 @@ export default defineComponent({
     computed: {
         ...mapState({
             queueItemList: 'items',
-            currentItem: 'currentItem'
+            currentItem: 'currentItem',
+            currentItemProgress: 'currentItemProgress'
         })
     }
 

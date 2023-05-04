@@ -5,7 +5,6 @@ import store from "@/store/index";
 
 export const state = reactive({
     connected: false,
-    events: Array<Event>(),
 });
 
 
@@ -28,8 +27,7 @@ export const socket = new WebsocketBuilder(URL)
         const wsEvent = Event.fromJson(JSON.parse(ev.data));
         console.log(`got an ${wsEvent.getReadableEvenId()} event`);
         console.log(`message: ${wsEvent.Message}`);
-        state.events.push(wsEvent);
-        store.commit('eventReceived',state.events)
+        store.commit('eventReceived',wsEvent)
 
     })
     .onRetry((i, ev) => {
@@ -54,6 +52,7 @@ eventType.set(3, {id: 3, name: "Process"});
 eventType.set(4, {id: 4, name: "Processed"});
 eventType.set(5, {id: 5, name: "ErrLogUpdated"});
 eventType.set(6, {id: 6, name: "InfoLogUpdated"});
+eventType.set(7, {id: 7, name: "ProgressUpdated"});
 
 export class Event {
     private _Id: number;

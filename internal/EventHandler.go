@@ -3,12 +3,13 @@ package internal
 import log "github.com/sirupsen/logrus"
 
 const (
-	Added          = 1
-	Removed        = 2
-	Process        = 3
-	Processed      = 4
-	ErrLogUpdated  = 5
-	InfoLogUpdated = 6
+	Added           = 1
+	Removed         = 2
+	Process         = 3
+	Processed       = 4
+	ErrLogUpdated   = 5
+	InfoLogUpdated  = 6
+	ProgressUpdated = 7
 )
 
 type Event struct {

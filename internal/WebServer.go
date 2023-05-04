@@ -137,6 +137,21 @@ func getCurrentProcessed(ctx *fasthttp.RequestCtx) {
 	ctx.SetStatusCode(fasthttp.StatusOK)
 	ctx.SetContentType("text/json")
 }
+func getStdLog(ctx *fasthttp.RequestCtx) {
+	getLog(ctx, "out")
+}
+func getErrLog(ctx *fasthttp.RequestCtx) {
+	getLog(ctx, "err")
+}
+
+func getLog(ctx *fasthttp.RequestCtx, logType string) {
+	id := ctx.UserValue("id")
+	path := fmt.Sprintf("%v/%v-%v.txt", configuration.LogDestination, id, logType)
+	fileContent := HandleError(os.ReadFile(path))
+	ctx.SetContentType("text/plain")
+	ctx.SetBody(fileContent)
+	ctx.SetStatusCode(fasthttp.StatusOK)
+}
 
 func webSocket(ctx *fasthttp.RequestCtx) {
 	err := upgrader.Upgrade(ctx, func(ws *websocket.Conn) {
@@ -214,6 +229,8 @@ func buildHandler(version string) *router.Router {
 	router.POST("/api/add", addElement)
 	router.GET("/api/all", getAll)
 	router.GET("/api/current", getCurrentProcessed)
+	router.GET("/api/log/std/{id}", getStdLog)
+	router.GET("/api/log/err/{id}", getErrLog)
 	router.ANY("/ws", webSocket)
 	router.GET("/status", fasthttpadaptor.NewFastHTTPHandler(h.Handler()))
 	router.GET("/ui/", redirectToIndexHtml)

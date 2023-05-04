@@ -8,13 +8,16 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 // Interfaces with crunchy-cli
 
 const CRUNCHY_CLI_BIN = "/usr/bin/crunchy-cli"
 
-var CRUNCHY_PARAMTERS = []string{"archive",
+var CRUNCHY_PARAMTERS = []string{
+	"-v",
+	"archive",
 	"-s", "de-DE",
 	"-o", "%v/{series_name}/S{season_number}E{relative_episode_number} {title}.mkv",
 	"--skip-existing",
@@ -38,8 +41,8 @@ func execCrunchy(item QueueItem) error {
 
 	preparedParameters := make([]string, len(CRUNCHY_PARAMTERS))
 	copy(preparedParameters, CRUNCHY_PARAMTERS)
-	preparedParameters[4] = fmt.Sprintf(CRUNCHY_PARAMTERS[4], configuration.MediaDestination)
-	preparedParameters[8] = fmt.Sprintf(CRUNCHY_PARAMTERS[8], item.CrunchyrollUrl)
+	preparedParameters[5] = fmt.Sprintf(CRUNCHY_PARAMTERS[5], configuration.MediaDestination)
+	preparedParameters[9] = fmt.Sprintf(CRUNCHY_PARAMTERS[9], item.CrunchyrollUrl)
 
 	command := exec.Command(CRUNCHY_CLI_BIN, preparedParameters...)
 
@@ -88,22 +91,41 @@ func execCrunchy(item QueueItem) error {
 	// Print the output of the program to the console and file
 	go func() {
 		scanner := bufio.NewScanner(stdout)
+
+		currentFileType := ""
 		for scanner.Scan() {
-			HandleError(fmt.Fprintln(mw, scanner.Text()))
+			cliLine := scanner.Text()
+			HandleError(fmt.Fprintln(mw, cliLine))
+			progress, foundFileType := calculateAndSendProgress(cliLine)
+			if foundFileType != "" {
+				currentFileType = strings.Clone(foundFileType)
+			}
+			if progress != "" && currentFileType != "" {
+				eventHandler.handleEvent(Event{
+					Id:      ProgressUpdated,
+					Item:    item,
+					Message: fmt.Sprintf("%v on Filetype %v", progress, currentFileType),
+				})
+			}
+			DebugLogf("FoundFileType=%v, progress=%v", foundFileType, progress)
 			eventHandler.handleEvent(Event{
-				Id:   InfoLogUpdated,
-				Item: item,
+				Id:      InfoLogUpdated,
+				Item:    item,
+				Message: cliLine,
 			})
 		}
+		DebugLogf("Last Filetype was %v", currentFileType)
 	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			HandleError(fmt.Fprintln(me, scanner.Text()))
+			cliLine := scanner.Text()
+			HandleError(fmt.Fprintln(me, cliLine))
 			eventHandler.handleEvent(Event{
-				Id:   ErrLogUpdated,
-				Item: item,
+				Id:      ErrLogUpdated,
+				Item:    item,
+				Message: cliLine,
 			})
 		}
 	}()
@@ -132,4 +154,20 @@ func crunchyValidation() error {
 	}
 
 	return nil
+}
+
+func calculateAndSendProgress(cliString string) (string, string) {
+	downloadProgress := "Downloaded and decrypted segment"
+	if strings.Contains(cliString, downloadProgress) {
+		progressString := strings.Split(strings.Split(cliString, downloadProgress)[1], "https://")[0]
+		progressString = strings.Split(strings.Split(progressString, "[")[1], "]")[0]
+		return progressString, ""
+	}
+	createTempFileString := "Created temporary file: "
+	if strings.Contains(cliString, createTempFileString) {
+		filetype := strings.Split(strings.Split(cliString, createTempFileString)[1], ".")[2]
+		return "", filetype
+	}
+
+	return "", ""
 }

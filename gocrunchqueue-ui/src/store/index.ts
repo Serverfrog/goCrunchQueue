@@ -6,12 +6,14 @@ import {Event} from "@/store/Socket"
 export interface QueueItemList {
     items: Array<QueueItem>
     currentItem: QueueItem
+    currentItemProgress: string
 }
 
 export default createStore({
     state: (): QueueItemList => ({
         items: Array<QueueItem>(),
-        currentItem: QueueItem.getEmpty()
+        currentItem: QueueItem.getEmpty(),
+        currentItemProgress: ""
     }),
     getters: {
         getQueueItemList: state => state.items,
@@ -22,15 +24,12 @@ export default createStore({
         updateList(state) {
             updateList(state)
         },
-        eventReceived(state, payload: Array<Event>) {
-            let isUpdateable = false;
-            for (const event of payload) {
-                if (event.Id < 5) {
-                    isUpdateable = true;
-                }
-            }
-            if (isUpdateable) {
+        eventReceived(state, payload: Event) {
+            if (payload.Id < 5) {
                 updateList(state);
+            }
+            if(payload.Id == 7){
+                state.currentItemProgress = payload.Message
             }
 
         },
