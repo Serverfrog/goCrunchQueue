@@ -28,4 +28,15 @@ jobs:
       uses: docker/build-push-action@v4.0.0
       with:
         push: true
-        tags: serverfrog/gocrunchqueue:$(date +%s)
+        tags: serverfrog/gocrunchqueue:${{ github.sha }}
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'docker.io/my-organization/my-app:${{ github.sha }}'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'    
