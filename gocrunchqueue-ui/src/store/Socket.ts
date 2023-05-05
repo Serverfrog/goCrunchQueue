@@ -12,8 +12,8 @@ const URL = getURL();
 
 function getURL() {
     if (process.env.NODE_ENV === "production") {
-        let protcoll = window.location.protocol === "https:" ? "wss://" : "ws://"
-        return `${protcoll}${window.location.hostname}/ws`
+        const protocol = window.location.protocol === "https:" ? "wss://" : "ws://"
+        return `${protocol}${window.location.hostname}/ws`
     } else {
         return "ws://localhost:80/ws"
     }
