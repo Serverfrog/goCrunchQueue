@@ -68,5 +68,7 @@ VOLUME /goCrunchQueue/media-destination
 VOLUME /root/.config/crunchy-cli
 VOLUME /goCrunchQueue/config
 
+RUN chmod +x /docker-entrypoint.sh
+
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["/goCrunchQueue/goCrunchQueue", "-config=/goCrunchQueue/config/config.yaml"]
