@@ -8,8 +8,16 @@ export const state = reactive({
 });
 
 
+const URL = getURL();
 
-const URL = process.env.NODE_ENV === "production" ? `ws://${window.location.hostname}/ws` : "ws://localhost:80/ws";
+function getURL() {
+    if (process.env.NODE_ENV === "production") {
+        let protcoll = window.location.protocol === "https:" ? "wss://" : "ws://"
+        return `${protcoll}${window.location.hostname}/ws`
+    } else {
+        return "ws://localhost:80/ws"
+    }
+}
 
 export const socket = new WebsocketBuilder(URL)
     .onOpen((i, ev) => {
@@ -27,7 +35,7 @@ export const socket = new WebsocketBuilder(URL)
         const wsEvent = Event.fromJson(JSON.parse(ev.data));
         console.log(`got an ${wsEvent.getReadableEvenId()} event`);
         console.log(`message: ${wsEvent.Message}`);
-        store.commit('eventReceived',wsEvent)
+        store.commit('eventReceived', wsEvent)
 
     })
     .onRetry((i, ev) => {
