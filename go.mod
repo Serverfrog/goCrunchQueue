@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/andybalholm/brotli v1.0.5
 	github.com/fasthttp/router v1.4.18
+	github.com/fasthttp/websocket v1.5.2
 	github.com/google/uuid v1.3.0
 	github.com/gookit/config/v2 v2.2.1
 	github.com/hellofresh/health-go/v5 v5.1.1
@@ -19,7 +20,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/fasthttp/websocket v1.5.2 // indirect
 	github.com/fatih/color v1.14.1 // indirect
 	github.com/goccy/go-yaml v1.10.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
